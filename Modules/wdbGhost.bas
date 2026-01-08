@@ -180,7 +180,7 @@ Set fso = Nothing
 Exit Function
 
 errCat:
-If Err.number = 70 Then
+If Err.Number = 70 Then
     Set wdb = GetObject("C:\workingdb\WorkingDB.accdb")
     grabWDB = True
 End If
