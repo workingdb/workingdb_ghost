@@ -31,7 +31,8 @@ On Error Resume Next
 Dim closeIt As Boolean
 closeIt = False
 
-Set conn = CurrentProject.Connection
+Set conn = New ADODB.Connection
+conn.Open "DRIVER=ODBC Driver 17 for SQL Server;SERVER=ITI-SQL\ITISQL;Trusted_Connection=Yes;APP=Microsoft Office;DATABASE=workingdb;"
 
 Call grabSessionID
 
@@ -42,11 +43,11 @@ If grabWDB Then
     
     'find all open forms
     Dim obj, sForm As Control
-    For Each obj In wdb.Application.forms
-        openForms = openForms & obj.name & "["
+    For Each obj In wdb.Application.Forms
+        openForms = openForms & obj.Name & "["
         For Each sForm In obj.Controls
             If sForm.ControlType = acSubform Then
-                openForms = openForms & "" & sForm.Form.name & ","
+                openForms = openForms & "" & sForm.Form.Name & ","
             End If
         Next sForm
         If Right(openForms, 1) = "," Then openForms = Left(openForms, Len(openForms) - 1)
@@ -54,7 +55,7 @@ If grabWDB Then
 nextOne:
     Next obj
     
-    conn.Execute "UPDATE tblWdbSessions SET wdbVersion = '" & Nz(wdb.TempVars!wdbVersion, "") & "' AND openForms = '" & openForms & "' AND lastCheck = GETDATE()"
+    conn.Execute "UPDATE tblWdbSessions SET wdbVersion = '" & Nz(wdb.TempVars!wdbVersion, "") & "', openForms = '" & openForms & "', lastCheck = GETDATE() WHERE recordId = " & TempVars!SessionID
     
     checkCommands
 Else
@@ -75,7 +76,7 @@ Function checkCommands()
 On Error Resume Next
 
 Dim rsGhostCommands As New ADODB.Recordset
-rsGhostCommands.Open "SELECT * FROM tblGhostCommands WHERE actionStart is not null", conn, adOpenForwardOnly, adLockReadOnly 'actionStart means this function is ON
+rsGhostCommands.Open "SELECT * FROM dbo.tblGhostCommands WHERE actionStart is not null", conn, adOpenForwardOnly, adLockReadOnly 'actionStart means this function is ON
 
 Dim doAction As Boolean
 
@@ -136,7 +137,7 @@ End Function
 Function closeAllMySessions()
 On Error Resume Next
 
-conn.Execute "UPDATE tblWdbSessions SET openForms = '', sessionEnd = '" & Now() & "' WHERE username = '" & Environ("username") & "' AND sessionEnd is null"
+conn.Execute "UPDATE dbo.tblWdbSessions SET openForms = NULL, sessionEnd = GETDATE() WHERE username = '" & Environ("username") & "' AND sessionEnd is null"
 
 End Function
 
@@ -148,7 +149,7 @@ If IsNull(TempVars!SessionID) Then
     'unregister all old sessions and start new
     closeAllMySessions
     conn.Execute "INSERT INTO tblWdbSessions(username,sessionStart,lastCheck,machine) VALUES('" & Environ("username") & "',GETDATE(),GETDATE(),'" & Environ("COMPUTERNAME") & "')"
-    TempVars.Add "SessionID", conn.Execute("SELECT @@identity")(0)
+    TempVars.Add "SessionID", conn.Execute("SELECT @@identity")(0).Value
 End If
 
 End Function
