@@ -3,7 +3,7 @@ Option Explicit
 
 Private Declare PtrSafe Sub Sleep Lib "kernel32.dll" (ByVal dwMilliseconds As Long)
 
-Public db As Database
+Public conn As ADODB.Connection
 Public wdb As Access.Application
 
 Function onTime()
@@ -31,15 +31,13 @@ On Error Resume Next
 Dim closeIt As Boolean
 closeIt = False
 
-Set db = CurrentDb()
+Set conn = CurrentProject.Connection
 
 Call grabSessionID
 
 If grabWDB Then
     'if WDB found, then track the forms
-    Dim rsSess As Recordset, openForms As String
-    Set rsSess = db.OpenRecordset("SELECT * FROM tblWdbSessions WHERE recordId = " & TempVars!SessionID)
-    
+    Dim openForms As String
     openForms = ""
     
     'find all open forms
@@ -56,13 +54,7 @@ If grabWDB Then
 nextOne:
     Next obj
     
-    With rsSess
-        .Edit
-            !wdbVersion = Nz(wdb.TempVars!wdbVersion, "")
-            !openForms = openForms
-            !lastCheck = Now()
-        .Update
-    End With
+    conn.Execute "UPDATE tblWdbSessions SET wdbVersion = '" & Nz(wdb.TempVars!wdbVersion, "") & "' AND openForms = '" & openForms & "' AND lastCheck = GETDATE()"
     
     checkCommands
 Else
@@ -73,7 +65,7 @@ End If
 
 'cleanup
 Set wdb = Nothing
-Set db = Nothing
+Set conn = Nothing
 
 If closeIt Then Application.Quit
 
@@ -82,15 +74,12 @@ End Function
 Function checkCommands()
 On Error Resume Next
 
-Dim rsGhostCommands As Recordset
-Set rsGhostCommands = db.OpenRecordset("SELECT * FROM tblGhostCommands WHERE actionStart is not null") 'actionStart means this function is ON
+Dim rsGhostCommands As New ADODB.Recordset
+rsGhostCommands.Open "SELECT * FROM tblGhostCommands WHERE actionStart is not null", conn, adOpenForwardOnly, adLockReadOnly 'actionStart means this function is ON
 
 Dim doAction As Boolean
 
-If rsGhostCommands.RecordCount = 0 Then Exit Function
-
 Do While Not rsGhostCommands.EOF
-
     With rsGhostCommands
     
         If Nz(!specificUser, "") <> "" And !specificUser <> Environ("username") Then Exit Function 'this is meant for a specific user
@@ -139,12 +128,15 @@ nextCommand:
     End With
 Loop
 
+If rsGhostCommands.State = adStateOpen Then rsGhostCommands.Close
+Set rsGhostCommands = Nothing
+
 End Function
 
 Function closeAllMySessions()
 On Error Resume Next
 
-db.Execute "UPDATE tblWdbSessions SET openForms = '', sessionEnd = '" & Now() & "' WHERE user = '" & Environ("username") & "' AND sessionEnd is null"
+conn.Execute "UPDATE tblWdbSessions SET openForms = '', sessionEnd = '" & Now() & "' WHERE username = '" & Environ("username") & "' AND sessionEnd is null"
 
 End Function
 
@@ -155,8 +147,8 @@ If IsNull(TempVars!SessionID) Then
     'current session is not registered.
     'unregister all old sessions and start new
     closeAllMySessions
-    db.Execute "INSERT INTO tblWdbSessions(user,sessionStart,lastCheck,machine) VALUES('" & Environ("username") & "','" & Now() & "','" & Now() & "','" & Environ("COMPUTERNAME") & "')"
-    TempVars.Add "SessionID", db.OpenRecordset("SELECT @@identity")(0).Value
+    conn.Execute "INSERT INTO tblWdbSessions(username,sessionStart,lastCheck,machine) VALUES('" & Environ("username") & "',GETDATE(),GETDATE(),'" & Environ("COMPUTERNAME") & "')"
+    TempVars.Add "SessionID", conn.Execute("SELECT @@identity")(0)
 End If
 
 End Function

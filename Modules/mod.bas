@@ -13,7 +13,7 @@ Dim strTo As String
     Dim lngCnt As Long
     lngCnt = 0
     Do While Not rs1.EOF
-        strTo = strTo & getEmail(rs1![User]) & "; "
+        strTo = strTo & getEmail(rs1![userName]) & "; "
         lngCnt = lngCnt + 1
         rs1.MoveNext
     Loop
